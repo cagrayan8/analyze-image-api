@@ -1,1 +1,1 @@
-web: gunicorn analyze_image:app --bind=0.0.0.0:$PORT --workers=1
+web: waitress-serve --port=$PORT analyze_image:app
