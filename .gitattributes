@@ -1,1 +1,1 @@
-*.h5 -filter -merge -diff
+- *.h5 -filter -merge -diff
