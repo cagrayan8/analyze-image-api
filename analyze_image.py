@@ -59,9 +59,3 @@ def analyze():
 
     similarity = cosine_similarity(features1, features2)[0][0] * 100
     return jsonify({'similarity': round(similarity, 2)})
-
-# RAM bilgisi logla
-@app.before_first_request
-def log_memory_usage():
-    mem = psutil.Process().memory_info().rss / 1024 ** 2
-    print(f"Current memory usage: {mem:.2f} MB")
