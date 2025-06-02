@@ -1,28 +1,30 @@
-
 from flask import Flask, request, jsonify
 import requests
 from PIL import Image
 from io import BytesIO
 import numpy as np
+import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__)
-model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg', alpha=0.35)
+model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg', alpha=0.35, input_shape=(96, 96, 3))
+
+@tf.function
+def predict_features(image_array):
+    return model(image_array, training=False)
 
 def extract_features(image_url):
-    response = requests.get(image_url)
-    if response.status_code != 200:
-        return None, f"Failed to load image: status {response.status_code}"
-
     try:
+        response = requests.get(image_url, timeout=10)
+        response.raise_for_status()
         image = Image.open(BytesIO(response.content)).convert('RGB')
         image = image.resize((96, 96))
         image_array = np.expand_dims(np.array(image), axis=0)
         image_array = preprocess_input(image_array)
-        features = model.predict(image_array)
-        return features, None
+        features = predict_features(image_array)
+        return features.numpy(), None  # `EagerTensor` → NumPy
     except Exception as e:
         return None, str(e)
 
