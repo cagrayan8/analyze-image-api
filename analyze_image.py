@@ -12,12 +12,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 app = Flask(__name__)
 
 model = MobileNetV2(
-    weights='imagenet',
+    weights=None,
     include_top=False,
     pooling='avg',
     alpha=0.35,
     input_shape=(96, 96, 3)
 )
+model.load_weights("models/mobilenet.h5")
+
 
 @tf.function(experimental_relax_shapes=True)
 def predict_features(image_array):
