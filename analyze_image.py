@@ -35,29 +35,24 @@ def download_model():
             return False
     return True
 
-if not download_model():
-    print("❌ Kritik hata: Model indirilemedi")
-    exit(1)
+print("✅ MODE: Using keras built-in weights, skipping .h5 download.")
+
 
 # GPU bellek optimizasyonu
 physical_devices = tf.config.list_physical_devices('GPU')
 if physical_devices:
     tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-# 🔼 YÜKSELTİLMİŞ MODEL
-model = MobileNetV2(weights='imagenet', 
-                    include_top=False, 
-                    pooling='avg',
-                    alpha=1.0,
-                    input_shape=(160, 160, 3))
+# 🚫 Tüm download_model() fonksiyonu silinsin
 
-# Ağırlıkları yükle
-try:
-    model.load_weights("models/mobilenet.h5")
-    print("✅ Model weights loaded successfully")
-except Exception as e:
-    print(f"❌ Model loading failed: {str(e)}")
-    raise SystemExit(1)
+model = MobileNetV2(
+    weights='imagenet',
+    include_top=False,
+    pooling='avg',
+    alpha=1.0,
+    input_shape=(160, 160, 3)
+)
+
 
 @tf.function
 def predict_features(image_array):
