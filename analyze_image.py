@@ -57,5 +57,5 @@ def analyze():
     if err1 or err2:
         return jsonify({'error': err1 or err2}), 500
 
-    similarity = cosine_similarity(features1, features2)[0][0] * 100
+    similarity = float(cosine_similarity(features1, features2)[0][0]) * 100
     return jsonify({'similarity': round(similarity, 2)})
