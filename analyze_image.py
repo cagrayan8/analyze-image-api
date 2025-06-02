@@ -10,12 +10,18 @@ from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__)
-model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg', alpha=0.35, input_shape=(96, 96, 3))
+
+model = MobileNetV2(
+    weights='imagenet',
+    include_top=False,
+    pooling='avg',
+    alpha=0.35,
+    input_shape=(96, 96, 3)
+)
 
 @tf.function(experimental_relax_shapes=True)
 def predict_features(image_array):
     return model(image_array, training=False)
-
 
 def extract_features(image_url):
     try:
@@ -26,7 +32,7 @@ def extract_features(image_url):
         image_array = np.expand_dims(np.array(image), axis=0)
         image_array = preprocess_input(image_array)
         features = predict_features(image_array)
-        return features.numpy(), None  # `EagerTensor` → NumPy
+        return features.numpy(), None
     except Exception as e:
         return None, str(e)
 
@@ -48,4 +54,11 @@ def analyze():
     similarity = cosine_similarity(features1, features2)[0][0] * 100
     return jsonify({'similarity': round(similarity, 2)})
 
-print(f"Current memory usage: {psutil.Process().memory_info().rss / 1024 ** 2:.2f} MB")
+@app.before_first_request
+def log_memory_usage():
+    mem = psutil.Process().memory_info().rss / 1024 ** 2
+    print(f"Current memory usage: {mem:.2f} MB")
+
+# Local test için (Railway değilken çalışır)
+if __name__ == '__main__':
+    app.run(debug=True)
