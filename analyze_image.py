@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.metrics.pairwise import cosine_similarity
-import os  # Eksik olan os modülü eklendi
+import os
 
 app = Flask(__name__)
 
@@ -19,20 +19,15 @@ def download_model():
     if not os.path.exists(model_path):
         print("⏬ Model dosyası indiriliyor...")
         os.makedirs(model_dir, exist_ok=True)
-        
-        # MODEL_URL ortam değişkeninden al veya doğrudan URL kullan
         model_url = os.environ.get(
             "MODEL_URL", 
             "https://github.com/kullaniciadı/proje/raw/main/models/mobilenet.h5"
         )
-        
         try:
             response = requests.get(model_url, timeout=60)
             response.raise_for_status()
-            
             with open(model_path, 'wb') as f:
                 f.write(response.content)
-                
             print(f"✅ Model {model_path} başarıyla indirildi")
             return True
         except Exception as e:
@@ -40,7 +35,6 @@ def download_model():
             return False
     return True
 
-# Modeli indir
 if not download_model():
     print("❌ Kritik hata: Model indirilemedi")
     exit(1)
@@ -50,14 +44,12 @@ physical_devices = tf.config.list_physical_devices('GPU')
 if physical_devices:
     tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-# Model tanımı
-model = MobileNetV2(
-    weights=None,
-    include_top=False,
-    pooling='avg',
-    alpha=0.35,
-    input_shape=(96, 96, 3)
-)
+# 🔼 YÜKSELTİLMİŞ MODEL
+model = MobileNetV2(weights='imagenet', 
+                    include_top=False, 
+                    pooling='avg',
+                    alpha=1.0,
+                    input_shape=(160, 160, 3))
 
 # Ağırlıkları yükle
 try:
@@ -65,32 +57,25 @@ try:
     print("✅ Model weights loaded successfully")
 except Exception as e:
     print(f"❌ Model loading failed: {str(e)}")
-    # Hata durumunda uygulamayı durdur
     raise SystemExit(1)
 
-# Tahmin fonksiyonu
 @tf.function
 def predict_features(image_array):
     return model(image_array, training=False)
 
-# Özellik çıkarımı
 def extract_features(image_url):
     try:
         response = requests.get(image_url, timeout=15)
         response.raise_for_status()
-        
         image = Image.open(BytesIO(response.content)).convert('RGB')
-        image = image.resize((96, 96))
-        
+        image = image.resize((160, 160))  # 🔼 BÜYÜK GÖRSEL
         image_array = np.expand_dims(np.array(image), axis=0)
         image_array = preprocess_input(image_array)
-        
         features = predict_features(image_array)
         return features.numpy(), None
     except Exception as e:
         return None, str(e)
 
-# Health check endpoint
 @app.route('/')
 def health_check():
     return jsonify({
@@ -99,7 +84,6 @@ def health_check():
         "model_loaded": model is not None
     })
 
-# API endpoint
 @app.route('/analyze', methods=['POST'])
 def analyze():
     data = request.get_json()
@@ -121,15 +105,17 @@ def analyze():
         if err2:
             return jsonify({'error': f'Image 2 processing failed: {err2}'}), 500
 
-        similarity = float(cosine_similarity(features1, features2)[0][0]) * 100
+        raw_similarity = cosine_similarity(features1, features2)[0][0]
+        similarity = max(0.0, min(1.0, raw_similarity))  # Clamp 0–1
+        similarity_percent = round(similarity * 100, 2)
+
         return jsonify({
-            'similarity': round(similarity, 2),
+            'similarity': similarity_percent,
             'status': 'success'
         })
     except Exception as e:
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
-# Ana uygulama başlatma
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Server running on port {port}")
