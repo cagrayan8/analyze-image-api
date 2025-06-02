@@ -11,6 +11,40 @@ import os  # Eksik olan os modülü eklendi
 
 app = Flask(__name__)
 
+# Model indirme fonksiyonu
+def download_model():
+    model_dir = "models"
+    model_path = os.path.join(model_dir, "mobilenet.h5")
+    
+    if not os.path.exists(model_path):
+        print("⏬ Model dosyası indiriliyor...")
+        os.makedirs(model_dir, exist_ok=True)
+        
+        # MODEL_URL ortam değişkeninden al veya doğrudan URL kullan
+        model_url = os.environ.get(
+            "MODEL_URL", 
+            "https://github.com/kullaniciadı/proje/raw/main/models/mobilenet.h5"
+        )
+        
+        try:
+            response = requests.get(model_url, timeout=60)
+            response.raise_for_status()
+            
+            with open(model_path, 'wb') as f:
+                f.write(response.content)
+                
+            print(f"✅ Model {model_path} başarıyla indirildi")
+            return True
+        except Exception as e:
+            print(f"❌ Model indirme hatası: {str(e)}")
+            return False
+    return True
+
+# Modeli indir
+if not download_model():
+    print("❌ Kritik hata: Model indirilemedi")
+    exit(1)
+
 # GPU bellek optimizasyonu
 physical_devices = tf.config.list_physical_devices('GPU')
 if physical_devices:
