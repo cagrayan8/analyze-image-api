@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import requests
 from PIL import Image
 from io import BytesIO
+import psutil
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV2
@@ -11,9 +12,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 app = Flask(__name__)
 model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg', alpha=0.35, input_shape=(96, 96, 3))
 
-@tf.function
+@tf.function(experimental_relax_shapes=True)
 def predict_features(image_array):
     return model(image_array, training=False)
+
 
 def extract_features(image_url):
     try:
@@ -45,3 +47,5 @@ def analyze():
 
     similarity = cosine_similarity(features1, features2)[0][0] * 100
     return jsonify({'similarity': round(similarity, 2)})
+
+print(f"Current memory usage: {psutil.Process().memory_info().rss / 1024 ** 2:.2f} MB")

@@ -2,6 +2,7 @@ services:
   - type: web
     name: analyze-image-api
     env: python
+    plan: starter
     buildCommand: ""
     startCommand: gunicorn -w 1 -b 0.0.0.0:5000 analyze_image:app
     envVars:
