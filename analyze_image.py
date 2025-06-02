@@ -11,6 +11,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__)
 
+# Model tanımı (önceden eğitilmiş ağırlıklar olmadan)
 model = MobileNetV2(
     weights=None,
     include_top=False,
@@ -18,13 +19,15 @@ model = MobileNetV2(
     alpha=0.35,
     input_shape=(96, 96, 3)
 )
+# Ağırlıkları yükle
 model.load_weights("models/mobilenet.h5")
 
-
+# Tahmin fonksiyonu
 @tf.function(experimental_relax_shapes=True)
 def predict_features(image_array):
     return model(image_array, training=False)
 
+# Özellik çıkarımı
 def extract_features(image_url):
     try:
         response = requests.get(image_url, timeout=10)
@@ -38,6 +41,7 @@ def extract_features(image_url):
     except Exception as e:
         return None, str(e)
 
+# API endpoint
 @app.route('/analyze', methods=['POST'])
 def analyze():
     data = request.get_json()
@@ -56,11 +60,8 @@ def analyze():
     similarity = cosine_similarity(features1, features2)[0][0] * 100
     return jsonify({'similarity': round(similarity, 2)})
 
+# RAM bilgisi logla
 @app.before_first_request
 def log_memory_usage():
     mem = psutil.Process().memory_info().rss / 1024 ** 2
     print(f"Current memory usage: {mem:.2f} MB")
-
-# Local test için (Railway değilken çalışır)
-if __name__ == '__main__':
-    app.run(debug=True)
