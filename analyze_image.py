@@ -9,7 +9,7 @@ from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.metrics.pairwise import cosine_similarity
 
 app = Flask(__name__)
-model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg', alpha=0.2)
+model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg', alpha=0.35)
 
 def extract_features(image_url):
     response = requests.get(image_url)
@@ -18,7 +18,7 @@ def extract_features(image_url):
 
     try:
         image = Image.open(BytesIO(response.content)).convert('RGB')
-        image = image.resize((128, 128))
+        image = image.resize((96, 96))
         image_array = np.expand_dims(np.array(image), axis=0)
         image_array = preprocess_input(image_array)
         features = model.predict(image_array)
