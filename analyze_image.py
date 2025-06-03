@@ -31,9 +31,10 @@ model = MobileNetV2(
     input_shape=(160, 160, 3)
 )
 
-@tf.function
 def predict_features(image_array):
     return model(image_array, training=False)
+
+
 
 def extract_features(image_url):
     try:
@@ -142,6 +143,7 @@ def analyze_family():
         for blob in blobs:
             if image_url in blob.public_url:
                 continue  # aynı görseli karşılaştırma
+            print(f"🔍 Comparing uploaded image with: {blob.public_url}")
 
             compare_features, err2 = extract_features_from_blob(blob)
             if err2 or compare_features is None:
