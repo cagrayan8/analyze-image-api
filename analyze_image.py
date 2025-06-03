@@ -124,30 +124,28 @@ def analyze_family():
 
     try:
         uploaded_features, err = extract_features(image_url)
-        if err:
+        if err or uploaded_features is None:
             return jsonify({'error': f'Uploaded image failed: {err}'}), 500
 
         bucket = firebase_storage.bucket()
         prefix = f"assignments_images/{family_id}/"
         blobs = list(bucket.list_blobs(prefix=prefix))
 
-        if not blobs:
-            similarity = cosine_similarity(uploaded_features, uploaded_features)[0][0]
-            similarity = float(np.clip(similarity, 0.0, 1.0))
+        # Hiç görsel yoksa, ilk yükleme
+        if len(blobs) <= 1:
             return jsonify({
-                'max_similarity': round(similarity * 100, 2),
-                'status': 'no_previous_image'
+                'max_similarity': 0.0,
+                'status': 'first_upload'
             })
 
         max_similarity = 0.0
         for blob in blobs:
-            # Aynı görselin kendisiyle karşılaştırmayı atla
             if image_url in blob.public_url:
-                continue
+                continue  # aynı görseli karşılaştırma
 
             compare_features, err2 = extract_features_from_blob(blob)
-            if err2:
-                continue
+            if err2 or compare_features is None:
+                continue  # bozuk veya indirilemeyen dosyalar atlanır
 
             similarity = cosine_similarity(uploaded_features, compare_features)[0][0]
             similarity = float(np.clip(similarity, 0.0, 1.0))
