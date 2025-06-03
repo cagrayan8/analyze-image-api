@@ -7,6 +7,7 @@ import json
 import base64
 import traceback
 import tensorflow as tf
+from urllib.parse import urlparse
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.metrics.pairwise import cosine_similarity
@@ -33,8 +34,6 @@ model = MobileNetV2(
 
 def predict_features(image_array):
     return model(image_array, training=False)
-
-
 
 def extract_features(image_url):
     try:
@@ -128,26 +127,32 @@ def analyze_family():
         if err or uploaded_features is None:
             return jsonify({'error': f'Uploaded image failed: {err}'}), 500
 
+        uploaded_filename = os.path.basename(urlparse(image_url).path)
+
         bucket = firebase_storage.bucket()
         prefix = f"assignments_images/{family_id}/"
         blobs = list(bucket.list_blobs(prefix=prefix))
 
-        # Hiç görsel yoksa, ilk yükleme
-        if len(blobs) <= 1:
+        # Geçerli karşılaştırılabilir blob'ları ayıkla
+        valid_blobs = [b for b in blobs if b.name.split('/')[-1] != uploaded_filename]
+
+        if not valid_blobs:
             return jsonify({
                 'max_similarity': 0.0,
                 'status': 'first_upload'
             })
 
         max_similarity = 0.0
-        for blob in blobs:
-            if image_url in blob.public_url:
-                continue  # aynı görseli karşılaştırma
+
+        for blob in valid_blobs:
             print(f"🔍 Comparing uploaded image with: {blob.public_url}")
 
             compare_features, err2 = extract_features_from_blob(blob)
             if err2 or compare_features is None:
-                continue  # bozuk veya indirilemeyen dosyalar atlanır
+                continue  # bozuk dosya
+            if uploaded_features.shape != compare_features.shape:
+                print("⚠️ Skipping due to shape mismatch.")
+                continue
 
             similarity = cosine_similarity(uploaded_features, compare_features)[0][0]
             similarity = float(np.clip(similarity, 0.0, 1.0))
