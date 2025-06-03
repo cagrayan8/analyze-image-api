@@ -3,6 +3,8 @@ import requests
 from PIL import Image
 from io import BytesIO
 import numpy as np
+import json
+import base64
 import traceback
 import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV2
@@ -91,7 +93,9 @@ def analyze():
 
 # Firebase Admin başlat
 if not firebase_admin._apps:
-    firebase_admin.initialize_app(options={
+    cred_json = base64.b64decode(os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON']).decode('utf-8')
+    cred = credentials.Certificate(json.loads(cred_json))
+    firebase_admin.initialize_app(cred, {
         'storageBucket': os.environ.get("FIREBASE_BUCKET", "myfamilyapp-9a733.appspot.com")
     })
 
