@@ -96,8 +96,9 @@ if not firebase_admin._apps:
     cred_json = base64.b64decode(os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON']).decode('utf-8')
     cred = credentials.Certificate(json.loads(cred_json))
     firebase_admin.initialize_app(cred, {
-        'storageBucket': 'myfamilyapp-9a733.firebasestorage.app'
+        'storageBucket': 'myfamilyapp-9a733.appspot.com'
     })
+
 
 
 @app.route('/analyze_family', methods=['POST'])
@@ -119,7 +120,16 @@ def analyze_family():
 
         bucket = firebase_storage.bucket()
         prefix = f"assignments_images/{family_id}/"
-        blobs = bucket.list_blobs(prefix=prefix)
+        blobs = list(bucket.list_blobs(prefix=prefix))  # ✅ Listeye çeviriyoruz
+
+        # ❗ Eğer hiç karşılaştıracak görsel yoksa kendisiyle karşılaştır
+        if not blobs:
+            similarity = cosine_similarity(uploaded_features, uploaded_features)[0][0]
+            similarity = float(np.clip(similarity, 0.0, 1.0))
+            return jsonify({
+                'max_similarity': round(similarity * 100, 2),
+                'status': 'no_previous_image'
+            })
 
         max_similarity = 0.0
         for blob in blobs:
@@ -144,8 +154,3 @@ def analyze_family():
         print("🔴 EXCEPTION CAUGHT IN /analyze_family")
         traceback.print_exc()
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Server running on port {port}")
-    app.run(host='0.0.0.0', port=port, threaded=True)
