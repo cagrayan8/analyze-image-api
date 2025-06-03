@@ -8,6 +8,8 @@ from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.metrics.pairwise import cosine_similarity
 import os
+import firebase_admin
+from firebase_admin import credentials, storage as firebase_storage
 
 app = Flask(__name__)
 
@@ -115,3 +117,53 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 Server running on port {port}")
     app.run(host='0.0.0.0', port=port, threaded=True)
+    
+# Railway ortamı için otomatik init (serviceAccount olmadan)
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(options={
+        'storageBucket': os.environ.get("FIREBASE_BUCKET", "myfamilyapp-9a733.appspot.com")
+    })
+
+@app.route('/analyze_family', methods=['POST'])
+def analyze_family():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid JSON'}), 400
+
+    image_url = data.get('image_url')
+    family_id = data.get('family_id')
+
+    if not image_url or not family_id:
+        return jsonify({'error': 'image_url and family_id required'}), 400
+
+    try:
+        uploaded_features, err = extract_features(image_url)
+        if err:
+            return jsonify({'error': f'Uploaded image failed: {err}'}), 500
+
+        bucket = firebase_storage.bucket()
+        prefix = f"assignments_images/{family_id}/"
+        blobs = bucket.list_blobs(prefix=prefix)
+
+        max_similarity = 0.0
+        for blob in blobs:
+            blob_url = f"https://storage.googleapis.com/{bucket.name}/{blob.name}"
+            if blob_url == image_url:
+                continue
+
+            compare_features, err2 = extract_features(blob_url)
+            if err2:
+                continue  # Atla
+
+            similarity = cosine_similarity(uploaded_features, compare_features)[0][0]
+            similarity = float(np.clip(similarity, 0.0, 1.0))  # ✔️ Clamp 0–1
+            max_similarity = max(max_similarity, similarity)
+
+        return jsonify({
+            'max_similarity': round(max_similarity * 100, 2),
+            'status': 'success'
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+
