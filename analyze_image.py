@@ -96,7 +96,7 @@ if not firebase_admin._apps:
     cred_json = base64.b64decode(os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON']).decode('utf-8')
     cred = credentials.Certificate(json.loads(cred_json))
     firebase_admin.initialize_app(cred, {
-        'storageBucket': os.environ.get("FIREBASE_BUCKET", "myfamilyapp-9a733.firebasestorage.app")
+        'storageBucket': os.environ.get("FIREBASE_BUCKET", "myfamilyapp-9a733.appspot.com")
     })
 
 @app.route('/analyze_family', methods=['POST'])
