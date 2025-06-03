@@ -14,40 +14,14 @@ from firebase_admin import credentials, storage as firebase_storage
 
 app = Flask(__name__)
 
-# Model indirme fonksiyonu
-def download_model():
-    model_dir = "models"
-    model_path = os.path.join(model_dir, "mobilenet.h5")
-    
-    if not os.path.exists(model_path):
-        print("⏬ Model dosyası indiriliyor...")
-        os.makedirs(model_dir, exist_ok=True)
-        model_url = os.environ.get(
-            "MODEL_URL", 
-            "https://github.com/kullaniciadı/proje/raw/main/models/mobilenet.h5"
-        )
-        try:
-            response = requests.get(model_url, timeout=60)
-            response.raise_for_status()
-            with open(model_path, 'wb') as f:
-                f.write(response.content)
-            print(f"✅ Model {model_path} başarıyla indirildi")
-            return True
-        except Exception as e:
-            print(f"❌ Model indirme hatası: {str(e)}")
-            return False
-    return True
-
 print("✅ MODE: Using keras built-in weights, skipping .h5 download.")
-
 
 # GPU bellek optimizasyonu
 physical_devices = tf.config.list_physical_devices('GPU')
 if physical_devices:
     tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-# 🚫 Tüm download_model() fonksiyonu silinsin
-
+# Modeli yükle
 model = MobileNetV2(
     weights='imagenet',
     include_top=False,
@@ -55,7 +29,6 @@ model = MobileNetV2(
     alpha=1.0,
     input_shape=(160, 160, 3)
 )
-
 
 @tf.function
 def predict_features(image_array):
@@ -66,7 +39,7 @@ def extract_features(image_url):
         response = requests.get(image_url, timeout=15)
         response.raise_for_status()
         image = Image.open(BytesIO(response.content)).convert('RGB')
-        image = image.resize((160, 160))  # 🔼 BÜYÜK GÖRSEL
+        image = image.resize((160, 160))
         image_array = np.expand_dims(np.array(image), axis=0)
         image_array = preprocess_input(image_array)
         features = predict_features(image_array)
@@ -77,7 +50,7 @@ def extract_features(image_url):
 @app.route('/')
 def health_check():
     return jsonify({
-        "status": "healthy", 
+        "status": "healthy",
         "message": "API is running",
         "model_loaded": model is not None
     })
@@ -87,7 +60,7 @@ def analyze():
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Invalid JSON'}), 400
-        
+
     image_url_1 = data.get('image_url_1')
     image_url_2 = data.get('image_url_2')
 
@@ -104,7 +77,7 @@ def analyze():
             return jsonify({'error': f'Image 2 processing failed: {err2}'}), 500
 
         raw_similarity = cosine_similarity(features1, features2)[0][0]
-        similarity = max(0.0, min(1.0, raw_similarity))  # Clamp 0–1
+        similarity = float(np.clip(raw_similarity, 0.0, 1.0))
         similarity_percent = round(similarity * 100, 2)
 
         return jsonify({
@@ -112,14 +85,11 @@ def analyze():
             'status': 'success'
         })
     except Exception as e:
+        print("🔴 EXCEPTION CAUGHT IN /analyze")
+        traceback.print_exc()
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Server running on port {port}")
-    app.run(host='0.0.0.0', port=port, threaded=True)
-    
-# Railway ortamı için otomatik init (serviceAccount olmadan)
+# Firebase Admin başlat
 if not firebase_admin._apps:
     firebase_admin.initialize_app(options={
         'storageBucket': os.environ.get("FIREBASE_BUCKET", "myfamilyapp-9a733.appspot.com")
@@ -154,10 +124,10 @@ def analyze_family():
 
             compare_features, err2 = extract_features(blob_url)
             if err2:
-                continue  # Atla
+                continue
 
             similarity = cosine_similarity(uploaded_features, compare_features)[0][0]
-            similarity = float(np.clip(similarity, 0.0, 1.0))  # ✔️ Clamp 0–1
+            similarity = float(np.clip(similarity, 0.0, 1.0))
             max_similarity = max(max_similarity, similarity)
 
         return jsonify({
@@ -167,5 +137,10 @@ def analyze_family():
 
     except Exception as e:
         print("🔴 EXCEPTION CAUGHT IN /analyze_family")
-    traceback.print_exc()
-    return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Server running on port {port}")
+    app.run(host='0.0.0.0', port=port, threaded=True)
