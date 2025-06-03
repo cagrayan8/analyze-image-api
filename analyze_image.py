@@ -89,8 +89,8 @@ def analyze():
         if err2:
             return jsonify({'error': f'Image 2 processing failed: {err2}'}), 500
 
-        raw_similarity = cosine_similarity(features1, features2)[0][0]
-        similarity = float(np.clip(raw_similarity, 0.0, 1.0))
+        similarity = cosine_similarity(features1, features2)[0][0]
+        similarity = float(np.clip(similarity, 0.0, 1.0))
         similarity_percent = round(similarity * 100, 2)
 
         return jsonify({
@@ -98,7 +98,7 @@ def analyze():
             'status': 'success'
         })
     except Exception as e:
-        print("\u274c EXCEPTION CAUGHT IN /analyze")
+        print("❌ EXCEPTION CAUGHT IN /analyze")
         traceback.print_exc()
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
@@ -107,7 +107,7 @@ if not firebase_admin._apps:
     cred_json = base64.b64decode(os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON']).decode('utf-8')
     cred = credentials.Certificate(json.loads(cred_json))
     firebase_admin.initialize_app(cred, {
-        'storageBucket': 'myfamilyapp-9a733.firebasestorage.app'
+        'storageBucket': 'myfamilyapp-9a733.appspot.com'
     })
 
 @app.route('/analyze_family', methods=['POST'])
@@ -141,11 +141,14 @@ def analyze_family():
 
         max_similarity = 0.0
         for blob in blobs:
+            # Aynı görselin kendisiyle karşılaştırmayı atla
             if image_url in blob.public_url:
                 continue
+
             compare_features, err2 = extract_features_from_blob(blob)
             if err2:
                 continue
+
             similarity = cosine_similarity(uploaded_features, compare_features)[0][0]
             similarity = float(np.clip(similarity, 0.0, 1.0))
             max_similarity = max(max_similarity, similarity)
@@ -156,11 +159,11 @@ def analyze_family():
         })
 
     except Exception as e:
-        print("\u274c EXCEPTION CAUGHT IN /analyze_family")
+        print("❌ EXCEPTION CAUGHT IN /analyze_family")
         traceback.print_exc()
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"\U0001f680 Server running on port {port}")
+    print(f"🚀 Server running on port {port}")
     app.run(host='0.0.0.0', port=port, threaded=True)
