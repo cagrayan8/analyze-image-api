@@ -3,6 +3,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 import numpy as np
+import traceback
 import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
@@ -165,5 +166,6 @@ def analyze_family():
         })
 
     except Exception as e:
-        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
-
+        print("🔴 EXCEPTION CAUGHT IN /analyze_family")
+    traceback.print_exc()
+    return jsonify({'error': f'Internal server error: {str(e)}'}), 500
