@@ -15,7 +15,6 @@ import firebase_admin
 from firebase_admin import credentials, storage as firebase_storage
 
 app = Flask(__name__)
-
 print("✅ MODE: Using keras built-in weights, skipping .h5 download.")
 
 # GPU bellek optimizasyonu
@@ -41,6 +40,18 @@ def extract_features(image_url):
         response = requests.get(image_url, timeout=15)
         response.raise_for_status()
         image = Image.open(BytesIO(response.content)).convert('RGB')
+        image = image.resize((160, 160))
+        image_array = np.expand_dims(np.array(image), axis=0)
+        image_array = preprocess_input(image_array)
+        features = predict_features(image_array)
+        return features.numpy(), None
+    except Exception as e:
+        return None, str(e)
+
+def extract_features_from_blob(blob):
+    try:
+        image_bytes = blob.download_as_bytes()
+        image = Image.open(BytesIO(image_bytes)).convert('RGB')
         image = image.resize((160, 160))
         image_array = np.expand_dims(np.array(image), axis=0)
         image_array = preprocess_input(image_array)
@@ -87,7 +98,7 @@ def analyze():
             'status': 'success'
         })
     except Exception as e:
-        print("🔴 EXCEPTION CAUGHT IN /analyze")
+        print("\u274c EXCEPTION CAUGHT IN /analyze")
         traceback.print_exc()
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
@@ -98,7 +109,6 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(cred, {
         'storageBucket': 'myfamilyapp-9a733.firebasestorage.app'
     })
-
 
 @app.route('/analyze_family', methods=['POST'])
 def analyze_family():
@@ -119,9 +129,8 @@ def analyze_family():
 
         bucket = firebase_storage.bucket()
         prefix = f"assignments_images/{family_id}/"
-        blobs = list(bucket.list_blobs(prefix=prefix))  # ✅ Listeye çeviriyoruz
+        blobs = list(bucket.list_blobs(prefix=prefix))
 
-        # ❗ Eğer hiç karşılaştıracak görsel yoksa kendisiyle karşılaştır
         if not blobs:
             similarity = cosine_similarity(uploaded_features, uploaded_features)[0][0]
             similarity = float(np.clip(similarity, 0.0, 1.0))
@@ -132,14 +141,11 @@ def analyze_family():
 
         max_similarity = 0.0
         for blob in blobs:
-            blob_url = f"https://storage.googleapis.com/{bucket.name}/{blob.name}"
-            if blob_url == image_url:
+            if image_url in blob.public_url:
                 continue
-
-            compare_features, err2 = extract_features(blob_url)
+            compare_features, err2 = extract_features_from_blob(blob)
             if err2:
                 continue
-
             similarity = cosine_similarity(uploaded_features, compare_features)[0][0]
             similarity = float(np.clip(similarity, 0.0, 1.0))
             max_similarity = max(max_similarity, similarity)
@@ -150,6 +156,11 @@ def analyze_family():
         })
 
     except Exception as e:
-        print("🔴 EXCEPTION CAUGHT IN /analyze_family")
+        print("\u274c EXCEPTION CAUGHT IN /analyze_family")
         traceback.print_exc()
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    print(f"\U0001f680 Server running on port {port}")
+    app.run(host='0.0.0.0', port=port, threaded=True)
