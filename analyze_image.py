@@ -7,6 +7,7 @@ import urllib.parse
 import json
 import base64
 import traceback
+import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
@@ -152,12 +153,13 @@ def analyze_family():
         encoded_blob_name = path_parts[1].split('?')[0]
         uploaded_blob_name = urllib.parse.unquote(encoded_blob_name)
         
+        # ↪ Similarity skorlarını çizdirmek için:
+        similarity_scores = []
+        image_names = []
+        
         for blob in blobs:
-            # URL'den çıkarılan blob adı ile karşılaştır
             if blob.name == uploaded_blob_name:
                 continue
-                
-            print(f"🔍 Comparing uploaded image with: {blob.public_url}")
 
             compare_features, err2 = extract_features_from_blob(blob)
             if err2 or compare_features is None:
@@ -165,7 +167,13 @@ def analyze_family():
 
             similarity = cosine_similarity(uploaded_features, compare_features)[0][0]
             similarity = float(np.clip(similarity, 0.0, 1.0))
+            similarity_scores.append(similarity)
+            image_names.append(blob.name.split('/')[-1])
             max_similarity = max(max_similarity, similarity)
+
+        # ↪ Sonuçları görselleştir (döngü bittikten sonra!)
+        if similarity_scores and image_names:
+            plot_similarity_scores(similarity_scores, image_names)
 
         return jsonify({
             'max_similarity': round(max_similarity * 100, 2),
@@ -176,3 +184,20 @@ def analyze_family():
         print("❌ EXCEPTION CAUGHT IN /analyze_family")
         traceback.print_exc()
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+
+def plot_similarity_scores(scores, image_names, output_path='similarity_plot.png'):
+    plt.figure(figsize=(10, 5))
+    bars = plt.bar(image_names, scores, color='skyblue')
+    plt.ylim(0, 1)
+    plt.ylabel("Cosine Similarity")
+    plt.title("Similarity Scores with Uploaded Image")
+    plt.xticks(rotation=45, ha='right')
+
+    # Her barın üzerine skor yazısı koy
+    for bar, score in zip(bars, scores):
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2, yval + 0.01, f"{score:.2f}", ha='center')
+    
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
