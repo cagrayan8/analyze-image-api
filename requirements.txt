@@ -7,3 +7,4 @@ waitress==2.1.2
 protobuf==3.20.3
 tensorflow-cpu==2.16.1  # Python 3.10 ve 3.11 ile uyumlu
 firebase-admin==6.4.0
+matplotlib==3.8.4
