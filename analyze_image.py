@@ -13,6 +13,7 @@ from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.metrics.pairwise import cosine_similarity
 import os
+import time  # timestamp için
 import firebase_admin
 from firebase_admin import credentials, storage as firebase_storage
 
@@ -35,8 +36,6 @@ model = MobileNetV2(
 
 def predict_features(image_array):
     return model(image_array, training=False)
-
-
 
 def extract_features(image_url):
     try:
@@ -126,7 +125,6 @@ def analyze_family():
         return jsonify({'error': 'image_url and family_id required'}), 400
 
     try:
-        # Yüklenen görselin özelliklerini çıkar
         uploaded_features, err = extract_features(image_url)
         if err or uploaded_features is None:
             return jsonify({'error': f'Uploaded image failed: {err}'}), 500
@@ -135,28 +133,24 @@ def analyze_family():
         prefix = f"assignments_images/{family_id}/"
         blobs = list(bucket.list_blobs(prefix=prefix))
 
-        # Hiç görsel yoksa, ilk yükleme
         if len(blobs) == 0:
             return jsonify({
                 'max_similarity': 0.0,
                 'status': 'first_upload'
             })
 
-        max_similarity = 0.0
-        # URL'den blob adını çıkar
         parsed_url = urllib.parse.urlparse(image_url)
-        # Firebase Storage URL formatını ayrıştır
         path_parts = parsed_url.path.split('/o/')
         if len(path_parts) < 2:
             return jsonify({'error': 'Invalid image URL format'}), 400
-            
+
         encoded_blob_name = path_parts[1].split('?')[0]
         uploaded_blob_name = urllib.parse.unquote(encoded_blob_name)
-        
-        # ↪ Similarity skorlarını çizdirmek için:
+
         similarity_scores = []
         image_names = []
-        
+        max_similarity = 0.0
+
         for blob in blobs:
             if blob.name == uploaded_blob_name:
                 continue
@@ -171,13 +165,16 @@ def analyze_family():
             image_names.append(blob.name.split('/')[-1])
             max_similarity = max(max_similarity, similarity)
 
-        # ↪ Sonuçları görselleştir (döngü bittikten sonra!)
+        # Görsel çiz ve Firebase'e yükle
+        plot_url = None
         if similarity_scores and image_names:
             plot_similarity_scores(similarity_scores, image_names)
+            plot_url = upload_plot_to_firebase(family_id)
 
         return jsonify({
             'max_similarity': round(max_similarity * 100, 2),
-            'status': 'success'
+            'status': 'success',
+            'plot_url': plot_url
         })
 
     except Exception as e:
@@ -192,12 +189,16 @@ def plot_similarity_scores(scores, image_names, output_path='similarity_plot.png
     plt.ylabel("Cosine Similarity")
     plt.title("Similarity Scores with Uploaded Image")
     plt.xticks(rotation=45, ha='right')
-
-    # Her barın üzerine skor yazısı koy
     for bar, score in zip(bars, scores):
         yval = bar.get_height()
         plt.text(bar.get_x() + bar.get_width()/2, yval + 0.01, f"{score:.2f}", ha='center')
-    
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
+
+def upload_plot_to_firebase(family_id, local_path='similarity_plot.png'):
+    bucket = firebase_storage.bucket()
+    timestamp = int(time.time())
+    blob = bucket.blob(f"assignments_images/{family_id}/plots/similarity_plot_{timestamp}.png")
+    blob.upload_from_filename(local_path)
+    return blob.public_url
