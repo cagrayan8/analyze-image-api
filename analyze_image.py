@@ -7,7 +7,6 @@ import json
 import base64
 import traceback
 import tensorflow as tf
-from urllib.parse import urlparse
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.metrics.pairwise import cosine_similarity
@@ -34,6 +33,8 @@ model = MobileNetV2(
 
 def predict_features(image_array):
     return model(image_array, training=False)
+
+
 
 def extract_features(image_url):
     try:
@@ -123,35 +124,40 @@ def analyze_family():
         return jsonify({'error': 'image_url and family_id required'}), 400
 
     try:
+        # Yüklenen görselin özelliklerini çıkar
         uploaded_features, err = extract_features(image_url)
         if err or uploaded_features is None:
             return jsonify({'error': f'Uploaded image failed: {err}'}), 500
-
-        uploaded_filename = os.path.basename(urlparse(image_url).path)
 
         bucket = firebase_storage.bucket()
         prefix = f"assignments_images/{family_id}/"
         blobs = list(bucket.list_blobs(prefix=prefix))
 
-        # Geçerli karşılaştırılabilir blob'ları ayıkla
-        valid_blobs = [b for b in blobs if b.name.split('/')[-1] != uploaded_filename]
-
-        if not valid_blobs:
+        # Hiç görsel yoksa, ilk yükleme
+        if len(blobs) == 0:  # Düzeltme: sıfır kontrolü yap
             return jsonify({
                 'max_similarity': 0.0,
                 'status': 'first_upload'
             })
 
         max_similarity = 0.0
-
-        for blob in valid_blobs:
+        uploaded_blob_name = None
+        
+        # Yüklenen görselin blob adını bul
+        for blob in blobs:
+            if image_url in blob.public_url:
+                uploaded_blob_name = blob.name
+                break
+        
+        for blob in blobs:
+            # Yüklenen görseli kendisiyle karşılaştırmayı önle
+            if blob.name == uploaded_blob_name:
+                continue
+                
             print(f"🔍 Comparing uploaded image with: {blob.public_url}")
 
             compare_features, err2 = extract_features_from_blob(blob)
             if err2 or compare_features is None:
-                continue  # bozuk dosya
-            if uploaded_features.shape != compare_features.shape:
-                print("⚠️ Skipping due to shape mismatch.")
                 continue
 
             similarity = cosine_similarity(uploaded_features, compare_features)[0][0]
@@ -167,8 +173,3 @@ def analyze_family():
         print("❌ EXCEPTION CAUGHT IN /analyze_family")
         traceback.print_exc()
         return jsonify({'error': f'Internal server error: {str(e)}'}), 500
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Server running on port {port}")
-    app.run(host='0.0.0.0', port=port, threaded=True)
