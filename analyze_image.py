@@ -3,6 +3,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 import numpy as np
+import urllib.parse 
 import json
 import base64
 import traceback
@@ -134,23 +135,25 @@ def analyze_family():
         blobs = list(bucket.list_blobs(prefix=prefix))
 
         # Hiç görsel yoksa, ilk yükleme
-        if len(blobs) == 0:  # Düzeltme: sıfır kontrolü yap
+        if len(blobs) == 0:
             return jsonify({
                 'max_similarity': 0.0,
                 'status': 'first_upload'
             })
 
         max_similarity = 0.0
-        uploaded_blob_name = None
+        # URL'den blob adını çıkar
+        parsed_url = urllib.parse.urlparse(image_url)
+        # Firebase Storage URL formatını ayrıştır
+        path_parts = parsed_url.path.split('/o/')
+        if len(path_parts) < 2:
+            return jsonify({'error': 'Invalid image URL format'}), 400
+            
+        encoded_blob_name = path_parts[1].split('?')[0]
+        uploaded_blob_name = urllib.parse.unquote(encoded_blob_name)
         
-        # Yüklenen görselin blob adını bul
         for blob in blobs:
-            if image_url in blob.public_url:
-                uploaded_blob_name = blob.name
-                break
-        
-        for blob in blobs:
-            # Yüklenen görseli kendisiyle karşılaştırmayı önle
+            # URL'den çıkarılan blob adı ile karşılaştır
             if blob.name == uploaded_blob_name:
                 continue
                 
